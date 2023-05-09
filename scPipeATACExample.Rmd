@@ -1,0 +1,137 @@
+---
+title: "scPipe ATAC Pipeline Example"
+output: html_document
+date: "2023-4-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, collapse=TRUE, eval=FALSE}
+BiocManager::install("scPipe")
+
+library(scPipe)
+```
+
+## Dataset
+The 20% dataset (data) has 27,874,367 reads, with about 1G gz read files.
+```{r, collapse=TRUE}
+reference <- "/stornext/General/data/user_managed/grpu_mritchie_1/Oliver/scPipeData/genomeGRCh38.fa"
+
+data.folder     <- "/stornext/Projects/promethion/promethion_access/lab_ritchie/scM_multiome_1/short_term/scMixology_2_ATAC/outs/fastq_path/H5LGTAFX3/scMixology_20/"
+data.r1Name     <- "scM2_20_ATAC_R1.fastq.gz"
+data.r2Name     <- "scM2_20_ATAC_R3.fastq.gz"
+data.r1         <- file.path(data.folder, data.r1Name)
+data.r2         <- file.path(data.folder, data.r2Name)
+data.bc_file    <- file.path(data.folder, "scM2_20_ATAC_R2.fastq.gz")
+data.out        <- paste0(tempdir(), "/data")
+```
+The 80% dataset (data) has has 112,463,635 reads, with about 4GB gz read files.
+```{r, collapse=TRUE, eval=FALSE}
+reference <- "/stornext/General/data/user_managed/grpu_mritchie_1/Oliver/scPipeData/genomeGRCh38.fa"
+
+data.folder     <- "/stornext/Projects/promethion/promethion_access/lab_ritchie/scM_multiome_1/short_term/scMixology_2_ATAC/outs/fastq_path/H5LGTAFX3/scMixology_80/"
+data.r1Name     <- "scM2_80_ATAC_R1.fastq.gz"
+data.r2Name     <- "scM2_80_ATAC_R3.fastq.gz"
+data.r1         <- file.path(data.folder, data.r1Name)
+data.r2         <- file.path(data.folder, data.r2Name)
+data.bc_file    <- file.path(data.folder, "scM2_80_ATAC_R2.fastq.gz")
+data.out        <- paste0(tempdir(), "/data")
+```
+
+### Trim Barcode
+```{r, eval=FALSE}
+sc_atac_trim_barcode(
+	r1=data.r1, r2=data.r2, bc_file=data.bc_file,
+	rmN=FALSE, rmlow=FALSE, output_folder=data.out)
+```
+
+### SC Aligning
+```{r, eval=FALSE}
+# sc_aligning
+demux_r1 <- file.path(
+	data.out, "demux_completematch_", data.r1Name)
+demux_r2 <- file.path(
+	data.out, "demux_completematch_", data.r2Name)
+
+bam_to_tag <- sc_aligning(
+	ref=reference, 
+	tech="atac",
+	R1=demux_r1,
+	R2=demux_r2,
+	nthreads=12,
+	output_folder=data.out
+)
+```
+
+### BAM Tagging
+```{r, eval=FALSE}
+sorted_tagged_bam <- sc_atac_bam_tagging(
+ 	inbam=bam_to_tag,
+ 	output_folder=data.out,
+ 	bam_tags=list(bc="CB", mb="OX"),
+ 	nthreads=12
+)
+```
+
+### Remove Duplicates
+```{r, eval=FALSE}
+sorted_tagged_bam <- sc_atac_remove_duplicates(
+	inbam=sorted_tagged_bam,
+	output_folder=data.out
+)
+```
+
+### Create Fragments
+```{r, eval=FALSE}
+sc_atac_create_fragments(
+	inbam=sorted_tagged_bam, output_folder=data.out, chromosomes="(?i)^N"
+)
+```
+
+### Peak Calling
+```{r, eval=FALSE}
+sc_atac_peak_calling(
+	inbam=sorted_tagged_bam,
+	output_folder=data.out,
+	reference
+)
+features <- file.path(data.out, "NA_peaks.narrowPeak")
+```
+
+### Feature Counting
+```{r, eval=FALSE}
+sc_atac_feature_counting(
+	fragment_file=file.path(data.out, "fragments.bed"),
+	feature_input=features,
+	bam_tags=list(bc="CB", mb="OX"),
+	feature_type="peak",
+	organism="hg38",
+	cell_calling=FALSE,
+	genome_size=NULL,
+	promoters_file=NULL,
+	tss_file=NULL,
+	enhs_file=NULL,
+	gene_anno_file=NULL,
+	bin_size=NULL,
+	yieldsize=1000000,
+	exclude_regions = TRUE,
+	excluded_regions_filename = NULL,
+	output_folder=data.out,
+	fix_chr = "none",
+	lower = NULL,
+	min_uniq_frags = 3000,
+	max_uniq_frags = 50000,
+	min_frac_peak = 0.3,
+	min_frac_tss = 0,
+	min_frac_enhancer = 0,
+	min_frac_promoter = 0.1,
+	max_frac_mito = 0.15
+)
+```
+
+### Session Info
+```{r, echo=FALSE, eval=TRUE}
+sessioninfo::session_info()
+```
